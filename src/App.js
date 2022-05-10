@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Panel from "./components/panel";
 import "./App.css";
 import Mensaje from "./components/mensaje";
@@ -10,14 +10,46 @@ import Preview from "./components/preview";
 
 //
 import uuid from "react-uuid";
+//
+import useDocumentTitle from "./components/documenttitle";
+import ItemsContext from "./components/items-context";
+import StatusContext from "./components/status-context";
+import { get, post, put } from "./lib/http";
+
 
 function App() {
+  const URL = "http://localhost:3010/";
+  //
   const [items, setItems] = useState([]);
   const [copyItem, setCopyItem] = useState([]);
   const [actualIndex, setActualIndex] = useState(-1);
+  const [lock, setLock] = useState(false);
+  const [status, setStatus] = useState(0);
+
+  // efecto segundario
+  /*   useEffect(() => {
+    document.title = copyItem[actualIndex]?.title ?? "notes";
+  }); */
+
+  useDocumentTitle(copyItem[actualIndex]?.title, "notes");
+
+  useEffect(() => {
+    getItems();
+  }, []);
+
+  async function getItems() {
+    let data = await get(`${URL}`);
+    let res = getOrderedNotes(data);
+
+    setItems(res);
+    setCopyItem(res);
+    if (items.length > 0) {
+      setActualIndex(0);
+    }
+  }
 
   //
-  function handleNewClick() {
+  async function handleNewClick() {
     const note = {
       id: uuid(),
       title: "mi  nota",
@@ -32,6 +64,7 @@ function App() {
 
     setItems(res);
     setCopyItem(res);
+    const data = await post(`${URL}new`, note);
   }
 
   function handlePinned(item, i) {
@@ -89,15 +122,39 @@ function App() {
     setCopyItem(notes);
   }
 
+  function autosave() {
+
+    if (!lock) {
+      setLock(true);
+      setStatus(1);
+      setTimeout(() => {
+        save()
+        setLock(false)
+      }, 3000);
+    }  
+  }
+
+  async function save(){
+    const item = items[actualIndex]
+    const response = await put(`${URL}update`,item)
+    setStatus(2)
+    setTimeout(() => {
+      setStatus(0)
+    }, 1000);
+
+  }
+
   function renderEditorAndPreviewUI() {
     return (
       <div>
-        <Editor
-          item={items[actualIndex]}
-          onchangeTitle={onchangeTitle}
-          onchangeText={onchangeText}
-        />
-        <Preview text={items[actualIndex].text} />
+        <StatusContext.Provider value={{ status: status, autosave: autosave }}>
+          <Editor
+            item={items[actualIndex]}
+            onchangeTitle={onchangeTitle}
+            onchangeText={onchangeText}
+          />
+          <Preview text={items[actualIndex].text} />
+        </StatusContext.Provider>
       </div>
     );
   }
@@ -112,7 +169,7 @@ function App() {
         (x) => x.title.indexOf(q) >= 0 || x.text.indexOf(q) >= 0
       );
 
-      if ((res.length === 0)) {
+      if (res.length === 0) {
         setActualIndex(-1);
       } else {
         setCopyItem([...res]);
@@ -124,7 +181,11 @@ function App() {
   return (
     <div className="App container">
       <Panel>
-        <Menu onNew={handleNewClick} onSearch={handleSearch} />
+        <ItemsContext.Provider
+          value={{ onSearch: handleSearch, onNew: handleNewClick }}
+        >
+          <Menu />
+        </ItemsContext.Provider>
 
         <List>
           {copyItem.map((item, i) => {

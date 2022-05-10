@@ -1,16 +1,23 @@
-export default function Editor({ item, onchangeTitle, onchangeText }) {
+import { useContext } from "react";
+import Status from "./status";
+import StatusContext from "./status-context";
 
+export default function Editor({ item, onchangeTitle, onchangeText }) {
+  const statusContext = useContext(StatusContext);
 
   function handletitleChange(e) {
     onchangeTitle(e);
+    statusContext.autosave();
   }
 
   function handletextChange(e) {
     onchangeText(e);
+    statusContext.autosave();
   }
 
   return (
     <div className="editor">
+      <Status statusCode={statusContext.status} />
       <div>
         <input
           className="title"
